@@ -1,0 +1,42 @@
+package fep:mrf@1.0.0;
+
+interface types {
+    /// The direction the activity is going
+    enum direction {
+        /// The activity is being received
+        incoming,
+
+        /// The activity is being sent out
+        outgoing,
+    }
+
+    /// Error types
+    variant error {
+        /// Reject the activity
+        reject,
+
+        /// An error occurred but the processing can continue
+        error-continue(string),
+
+        /// An error occurred and the processing should not continue
+        error-reject(string),
+    }
+}
+
+world meta {
+    /// Name of the MRF module
+    export name: func() -> string;
+
+    /// Version of the MRF module
+    export version: func() -> string;
+
+    /// MRF API version this module is compatible with
+    export api-version: func() -> string;
+}
+
+world mrf-v1 {
+    use types.{direction, error};
+
+    /// Transform an ActivityPub activity
+    export transform: func(direction: direction, activity: string) -> result<string, error>;
+}
