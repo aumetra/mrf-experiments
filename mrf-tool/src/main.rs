@@ -1,15 +1,14 @@
-use anyhow::{bail, Result};
+use anyhow::{anyhow, Result};
 use clap::{Args, Parser, Subcommand};
 use serde_json::Value;
 use std::{
     borrow::Cow,
-    fs,
-    fs::File,
-    io::Write,
+    fs::{self, File},
+    io::{self, Write},
     path::{Path, PathBuf},
 };
 use wasm_encoder::{ComponentSection, CustomSection};
-use wasmparser::Payload;
+use wasmparser::{CustomSectionReader, Payload};
 
 const MANIFEST_SECTION: &str = "manifest-v0";
 
@@ -23,7 +22,14 @@ struct AddManifest {
 
 #[derive(Args)]
 struct ReadManifest {
-    path: PathBuf,
+    module_path: PathBuf,
+}
+
+#[derive(Args)]
+struct RemoveManifest {
+    module_path: PathBuf,
+    #[arg(long, short)]
+    output: PathBuf,
 }
 
 #[derive(Subcommand)]
@@ -33,6 +39,9 @@ enum ToolSubcommand {
 
     /// Read the manifest from a WASM component
     ReadManifest(ReadManifest),
+
+    /// Remove the manifest from a WASM component
+    RemoveManifest(RemoveManifest),
 }
 
 #[derive(Parser)]
@@ -42,10 +51,9 @@ pub struct ToolArgs {
     command: ToolSubcommand,
 }
 
-fn read_manifest(blob: &[u8]) -> Result<()> {
+fn find_manifest_section(blob: &[u8]) -> Result<CustomSectionReader<'_>> {
     let mut payload_iter = wasmparser::Parser::new(0).parse_all(blob);
-
-    let mut data = None;
+    let mut manifest_section = None;
     while let Some(payload) = payload_iter.next().transpose()? {
         let Payload::CustomSection(section) = payload else {
             continue;
@@ -54,18 +62,41 @@ fn read_manifest(blob: &[u8]) -> Result<()> {
             continue;
         }
 
-        data = Some(section.data());
+        manifest_section = Some(section);
         break;
     }
 
-    let Some(data) = data else {
-        bail!("WASM blob doesn't have a manifest");
-    };
+    manifest_section.ok_or_else(|| anyhow!("no manifest section found"))
+}
 
-    let manifest: Value = serde_json::from_slice(data)?;
+fn read_manifest(blob: &[u8]) -> Result<()> {
+    let manifest_section = find_manifest_section(blob)?;
+    let manifest: Value = serde_json::from_slice(manifest_section.data())?;
     let prettified = serde_json::to_string_pretty(&manifest)?;
 
     println!("{prettified}");
+
+    Ok(())
+}
+
+fn remove_manifest(module_path: &Path, output_path: &Path) -> Result<()> {
+    let blob = fs::read(module_path)?;
+    let manifest_section = find_manifest_section(&blob)?;
+    let manifest_range = manifest_section.range();
+
+    let mut module_file = File::options()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(output_path)?;
+
+    // Check the size of the LEB128 encoded integer
+    let length_size =
+        leb128::write::unsigned(&mut io::sink(), manifest_section.data().len() as u64).unwrap();
+    let start_offset = 1 + length_size; // 1 byte for the section identifier, N bytes for the length of the section
+
+    module_file.write_all(&blob[..manifest_range.start - start_offset])?;
+    module_file.write_all(&blob[manifest_range.end..])?;
 
     Ok(())
 }
@@ -95,8 +126,11 @@ fn main() -> Result<()> {
             write_manifest(&manifest, &args.output)?;
         }
         ToolSubcommand::ReadManifest(args) => {
-            let data = fs::read(args.path)?;
+            let data = fs::read(args.module_path)?;
             read_manifest(&data)?;
+        }
+        ToolSubcommand::RemoveManifest(args) => {
+            remove_manifest(&args.module_path, &args.output)?;
         }
     }
 

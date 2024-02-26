@@ -1,2 +1,19 @@
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true
+
 [workspace]
 members = ["mrf-tool"]
+resolver = "2"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
+
+enum_variant_names = "allow"
+
+[workspace.lints.rust]
+forbidden_lint_groups = "allow"
+rust_2018_idioms = "forbid"
+unsafe_code = "deny"
