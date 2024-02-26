@@ -14,32 +14,45 @@ const MANIFEST_SECTION: &str = "manifest-v0";
 
 #[derive(Args)]
 struct AddManifest {
+    /// Path to the manifest
     manifest_path: PathBuf,
+
+    /// Path to the WASM module
     module_path: PathBuf,
+
+    /// Path to where the modifed WASM module should be written
     #[arg(long, short)]
     output: PathBuf,
 }
 
 #[derive(Args)]
 struct ReadManifest {
+    /// Path to the WASM module
     module_path: PathBuf,
 }
 
 #[derive(Args)]
 struct RemoveManifest {
+    /// Path to the WASM module
     module_path: PathBuf,
+
+    /// Path to where the modifed WASM module should be written
     #[arg(long, short)]
     output: PathBuf,
 }
 
 #[derive(Args)]
 struct ValidateModule {
+    /// Path to the WASM module
     module_path: PathBuf,
 }
 
 #[derive(Subcommand)]
 enum ToolSubcommand {
     /// Add a manifest to a WASM component
+    ///
+    /// Note: We don't validate whether the WASM component already contains a manifest section.
+    /// We simply append a new section.
     AddManifest(AddManifest),
 
     /// Read the manifest from a WASM component
