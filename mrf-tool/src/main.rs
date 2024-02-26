@@ -32,6 +32,11 @@ struct RemoveManifest {
     output: PathBuf,
 }
 
+#[derive(Args)]
+struct ValidateModule {
+    module_path: PathBuf,
+}
+
 #[derive(Subcommand)]
 enum ToolSubcommand {
     /// Add a manifest to a WASM component
@@ -42,6 +47,9 @@ enum ToolSubcommand {
 
     /// Remove the manifest from a WASM component
     RemoveManifest(RemoveManifest),
+
+    /// Validate a WASM module
+    ValidateModule(ValidateModule),
 }
 
 #[derive(Parser)]
@@ -131,6 +139,10 @@ fn main() -> Result<()> {
         }
         ToolSubcommand::RemoveManifest(args) => {
             remove_manifest(&args.module_path, &args.output)?;
+        }
+        ToolSubcommand::ValidateModule(args) => {
+            let data = fs::read(args.module_path)?;
+            wasmparser::validate(&data)?;
         }
     }
 
